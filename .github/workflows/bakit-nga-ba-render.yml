@@ -1,0 +1,76 @@
+name: Bakit Nga Ba - Render Short (manual, no upload)
+
+on:
+  workflow_dispatch:
+    inputs:
+      visual_source:
+        description: "AI 3D-look images (may be rate limited), or local/procedural fallback"
+        required: true
+        type: choice
+        default: pollinations
+        options:
+          - pollinations
+          - local
+      resolution:
+        description: "Vertical output resolution"
+        required: true
+        type: choice
+        default: 1080x1920
+        options:
+          - 1080x1920
+          - 720x1280
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bakit-nga-ba-render
+  cancel-in-progress: false
+
+jobs:
+  render:
+    name: Tagalog 3D-look Short (export-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install renderer dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Validate episode and no-upload safeguards
+        run: pytest -q tests/test_bakit_nga_ba_profile.py
+      - name: Render Filipino episode (never publish)
+        env:
+          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+          # Layered protection: config UPLOAD=false, process UPLOAD=false, CLI --no-upload.
+          UPLOAD: "false"
+          KEEP_VIDEOS: "true"
+        run: |
+          python -m purffle_shorts make \
+            --script examples/bakit-nga-ba-cheaters.json \
+            --env-file channels/bakit-nga-ba.env \
+            --lang fil \
+            --voice fil-PH-AngeloNeural \
+            --visuals "${{ inputs.visual_source }}" \
+            --resolution "${{ inputs.resolution }}" \
+            --no-upload
+      - name: Archive MP4, subtitle and metadata outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bakit-nga-ba-cheaters-short
+          path: |
+            output_videos/**/short.mp4
+            output_videos/**/cover.jpg
+            output_videos/**/captions.srt
+            output_videos/**/metadata.json
+            output_videos/**/script.json
+          if-no-files-found: warn
+          retention-days: 7
