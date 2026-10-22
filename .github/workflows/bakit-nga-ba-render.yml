@@ -1,16 +1,30 @@
 name: Bakit Nga Ba - Render Short (manual, no upload)
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/bakit-nga-ba-render.yml"
+      - "channels/bakit-nga-ba.env"
+      - "examples/bakit-nga-ba-cheaters.json"
+      - "purffle_shorts/media.py"
+      - "purffle_shorts/visual_quality.py"
+      - "purffle_shorts/overlays.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/bakit-nga-ba-render.yml"
+      - "channels/bakit-nga-ba.env"
+      - "examples/bakit-nga-ba-cheaters.json"
   workflow_dispatch:
     inputs:
       visual_source:
-        description: "AI scene art (rate-limited), or licensed local assets already committed"
+        description: "Saved Cloudflare scene art, or generate fresh Pollinations (rate-limited)"
         required: true
         type: choice
-        default: pollinations
+        default: local
         options:
-          - pollinations
           - local
+          - pollinations
       resolution:
         description: "Vertical output resolution"
         required: true
@@ -46,6 +60,52 @@ jobs:
           pip install -e ".[dev]"
       - name: Validate episode and no-upload safeguards
         run: pytest -q tests/test_bakit_nga_ba_profile.py
+      - name: Download and verify all 11 cinematic scene images
+        if: github.event_name != 'workflow_dispatch' || inputs.visual_source == 'local'
+        run: |
+          python - <<'PY'
+          import base64
+          import hashlib
+          import io
+          import time
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          from PIL import Image
+
+          root = Path("media/bakit-nga-ba-cheaters")
+          root.mkdir(parents=True, exist_ok=True)
+          hashes = []
+          base_url = "https://bakit-nga-ba-art.wordplays-transcribe.workers.dev"
+          for number in range(1, 12):
+              key = f"scene_{number:02d}.jpg"
+              url = f"{base_url}/{key}.b64"
+              errors = []
+              for attempt in range(3):
+                  try:
+                      with urlopen(Request(url, headers={"User-Agent": "BakitNgaBaShorts/1.0"}), timeout=30) as response:
+                          encoded = response.read()
+                      raw = base64.b64decode(encoded, validate=True)
+                      with Image.open(io.BytesIO(raw)) as image:
+                          image.verify()
+                      with Image.open(io.BytesIO(raw)) as image:
+                          if image.width < 500 or image.height < 800:
+                              raise ValueError(f"{key}: image too small: {image.size}")
+                      output = root / key
+                      output.write_bytes(raw)
+                      digest = hashlib.sha256(raw).hexdigest()
+                      hashes.append(digest)
+                      print(f"{key}: {len(raw):,} bytes, sha256={digest[:12]}")
+                      break
+                  except (Exception,) as exc:
+                      errors.append(str(exc))
+                      if attempt < 2:
+                          time.sleep(3 * (attempt + 1))
+              else:
+                  raise RuntimeError(f"Missing artwork for {key}: {errors}")
+          if len(set(hashes)) != 11:
+              raise RuntimeError("Repeated storyboard image detected; refusing generic duplicate visual package.")
+          print("All 11 scene artworks are valid and unique.")
+          PY
       - name: Render Filipino episode (never publish)
         env:
           POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
@@ -58,8 +118,8 @@ jobs:
             --env-file channels/bakit-nga-ba.env \
             --lang fil \
             --voice fil-PH-AngeloNeural \
-            --visuals "${{ inputs.visual_source }}" \
-            --resolution "${{ inputs.resolution }}" \
+            --visuals "${{ inputs.visual_source || 'local' }}" \
+            --resolution "${{ inputs.resolution || '1080x1920' }}" \
             --no-upload
       - name: Summarize missing artwork
         if: always()
