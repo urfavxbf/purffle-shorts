@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       visual_source:
-        description: "AI 3D-look images (may be rate limited), or local/procedural fallback"
+        description: "AI scene art (rate-limited), or licensed local assets already committed"
         required: true
         type: choice
         default: pollinations
@@ -61,8 +61,26 @@ jobs:
             --visuals "${{ inputs.visual_source }}" \
             --resolution "${{ inputs.resolution }}" \
             --no-upload
-      - name: Archive MP4, subtitle and metadata outputs
+      - name: Summarize missing artwork
         if: always()
+        run: |
+          python - <<'PY'
+          import glob, json, os
+          paths = glob.glob("output_videos/**/visual_audit.json", recursive=True)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## Bakit Nga Ba visual QA\n\n")
+              if not paths:
+                  summary.write("No visual audit generated; review the workflow logs.\n")
+              for path in paths:
+                  with open(path, encoding="utf-8") as file:
+                      audit = json.load(file)
+                  summary.write(f"**Coverage: {audit['complete_scenes']}/{audit['scene_count']} scenes**\n\n")
+                  for scene in audit["scenes"]:
+                      if not scene["ok"]:
+                          summary.write(f"- Scene {scene['scene']}: {', '.join(scene['issues'])}\n")
+          PY
+      - name: Archive MP4, subtitle and metadata outputs
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: bakit-nga-ba-cheaters-short
@@ -71,6 +89,17 @@ jobs:
             output_videos/**/cover.jpg
             output_videos/**/captions.srt
             output_videos/**/metadata.json
+            output_videos/**/script.json
+            output_videos/**/visual_audit.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Archive missing-visuals report when render fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bakit-nga-ba-visual-audit
+          path: |
+            output_videos/**/visual_audit.json
             output_videos/**/script.json
           if-no-files-found: warn
           retention-days: 7
