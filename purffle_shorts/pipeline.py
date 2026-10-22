@@ -40,6 +40,7 @@ from .script import (
 from .timing import SceneTiming, caption_chunks, scene_timeline, split_shots, srt, tokenize
 from .topics import Topic, pick_topic
 from .utils import Cancelled, check_cancel, redact, slugify, truncate_words
+from .visual_quality import audit_scene_visuals, require_visual_coverage
 
 log = logging.getLogger("purffle")
 
@@ -427,6 +428,18 @@ class Studio:
                 media = [got.get((st.index, st.part)) or got[(st.index, 0)] for st in shots]
                 credits = visuals.credits
             by_scene = {(st.index, st.part): m for st, m in zip(shots, media)}
+            # In high-fidelity channel profiles, fail early rather than ship a nearly
+            # blank MP4 when image services run out of credits. Keep a per-scene report
+            # even on failure; CI always uploads it for diagnosis.
+            visual_audit = audit_scene_visuals(shots, media, len(script.scenes))
+            (folder / "visual_audit.json").write_text(
+                json.dumps(visual_audit, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            log.info(
+                "Visual coverage: %d/%d scenes (required %.0f%%)",
+                visual_audit["complete_scenes"], visual_audit["scene_count"], 100 * s.min_visual_coverage,
+            )
+            require_visual_coverage(visual_audit, s.min_visual_coverage)
 
             self._step("captions")
             chunks = caption_chunks(speech.words, s.caption_max_words, total=total)
@@ -491,7 +504,7 @@ class Studio:
                 "duration": round(info["duration"], 2), "resolution": f"{s.width}x{s.height}",
                 "llm": writer, "score": script.score, "rubric": script.rubric, "review": script.review,
                 "search_keywords": pick.keywords, "localizations": localizations, "cover_at": round(cover_at, 2),
-                "cast": script.cast,
+                "cast": script.cast, "visual_audit": visual_audit,
                 "voice": f"{speech.engine}:{speech.voice}", "timing": speech.timing,
                 "visuals": [{"source": m.source, "id": m.id, "kind": m.kind, "query": m.query}
                             for m in media + ([background] if split else [])],
