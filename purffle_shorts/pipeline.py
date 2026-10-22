@@ -166,6 +166,19 @@ def _unique_folder(root: Path, name: str) -> Path:
     return folder
 
 
+def shots_requiring_media(shots, s: Settings) -> tuple[list, bool]:
+    """A prepared numbered art folder is scene-indexed, never shot-indexed."""
+    numbered_local = (
+        bool(s.visual_sources)
+        and s.visual_sources[0] == "local"
+        and (Path(s.media_dir) / "scene_01.jpg").is_file()
+    )
+    one_per_scene = bool(s.visual_sources) and (
+        s.visual_sources[0] in AI_SOURCES or numbered_local
+    )
+    return [shot for shot in shots if shot.part == 0 or not one_per_scene], numbered_local
+
+
 def _media_for(shots, media_map: dict[tuple[int, int], MediaItem]) -> list[MediaItem]:
     """Reuse the original video's footage for a translated copy. Its scenes may merge or split into shots
     differently, so each shot takes the closest (scene, shot) of the original."""
@@ -420,13 +433,7 @@ class Studio:
                 # as ONE image per storyboard scene, not one image per split shot.
                 # Without this, scene 7 might receive the scene 10 artwork while
                 # all files still pass a superficial "valid image" QA check.
-                numbered_local = (
-                    bool(s.visual_sources)
-                    and s.visual_sources[0] == "local"
-                    and (Path(s.media_dir) / "scene_01.jpg").is_file()
-                )
-                ai_first = bool(s.visual_sources) and (s.visual_sources[0] in AI_SOURCES or numbered_local)
-                wanted = [st for st in shots if st.part == 0 or not ai_first]
+                wanted, numbered_local = shots_requiring_media(shots, s)
                 jobs = [(script.scenes[st.index].search_query, script.scenes[st.index].image_prompt,
                          st.duration + T) for st in wanted]
                 # split layout: the footage fills the top half, so search for the shape of that half
