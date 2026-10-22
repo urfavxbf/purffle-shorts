@@ -162,6 +162,7 @@ class Settings:
     hook_overlay: bool = True
     watermark: str = ""               # blank = channel name; "none" = off
     end_cta: str = "Follow for more!"
+    cta_color: str = "#FF0033"  # channel-branded CTA pill background
     caption_style: str = "bold"       # bold|boxed|neon|clean|karaoke|minimal
     caption_position: str = "center"  # upper|center|lower
     caption_font: str = ""
@@ -335,6 +336,7 @@ class Settings:
             hook_overlay=_bool(_env("HOOK_OVERLAY", "true")),
             watermark=_env("WATERMARK"),
             end_cta=os.getenv("END_CTA", d.end_cta).strip(),  # set END_CTA= (empty) to disable
+            cta_color=_env("CTA_COLOR", d.cta_color),
             caption_style=_env("CAPTION_STYLE", d.caption_style).lower(),
             caption_position=_env("CAPTION_POSITION", d.caption_position).lower(),
             caption_font=_env("CAPTION_FONT"),
@@ -385,6 +387,8 @@ class Settings:
             youtube_api_key=_env("YOUTUBE_API_KEY"),
             notify_webhook=_env("NOTIFY_WEBHOOK"),
         )
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", s.cta_color):
+            raise ConfigError("CTA_COLOR must be a #RRGGBB hex color")
         if not 0.0 <= s.min_visual_coverage <= 1.0:
             raise ConfigError("MIN_VISUAL_COVERAGE must be between 0.0 and 1.0")
         from .crosspost import PLATFORMS, TIKTOK_PRIVACY
