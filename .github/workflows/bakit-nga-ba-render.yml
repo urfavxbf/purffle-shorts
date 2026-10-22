@@ -7,7 +7,10 @@ on:
       - "channels/bakit-nga-ba.env"
       - "examples/bakit-nga-ba-cheaters.json"
       - "purffle_shorts/media.py"
+      - "purffle_shorts/pipeline.py"
       - "purffle_shorts/visual_quality.py"
+      - "tests/test_visual_quality.py"
+      - "tests/test_bakit_nga_ba_profile.py"
       - "purffle_shorts/overlays.py"
   push:
     branches: [main]
