@@ -309,6 +309,20 @@ class Visuals:
         self._search_cache[ck] = items
         return items
 
+    def _numbered_local(self, idx: int, query: str) -> MediaItem | None:
+        """Prefer explicit storyboard assets named scene_01.jpg, scene_02.mp4, etc.
+
+        This is deterministic, reusable for multiple shots in one scene, and avoids
+        random image selection when a channel supplies a complete media package.
+        """
+        root = Path(self.s.media_dir)
+        for ext in (".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".webm"):
+            path = root / f"scene_{idx + 1:02d}{ext}"
+            if path.is_file():
+                kind = "video" if ext in VIDEO_EXT else "image"
+                return MediaItem("local", str(path), kind, path=path, query=query)
+        return None
+
     def _local(self, query: str) -> list[MediaItem]:
         root = Path(self.s.media_dir)
         if not root.is_dir():
@@ -388,6 +402,11 @@ class Visuals:
             if q and q.lower() not in [x.lower() for x in queries]:
                 queries.append(q)
         for source in list(self.sources):
+            if source == "local":
+                numbered = self._numbered_local(idx, query)
+                if numbered:
+                    log.info("Scene %d: numbered local %s", idx + 1, numbered.path)
+                    return numbered
             if source in ("openai-images", "ai", "dalle", "gpt-image", "pollinations"):
                 item = self._ai(source, image_prompt or query, dest_dir, idx)
                 if item:
