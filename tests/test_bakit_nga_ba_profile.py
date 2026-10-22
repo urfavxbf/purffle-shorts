@@ -32,7 +32,7 @@ def test_3d_look_prompt_consistency():
     episode = Script.from_dict(json.loads(EPISODE.read_text(encoding="utf-8")))
     for scene in episode.scenes:
         prompt = scene.image_prompt.lower()
-        for phrase in ("3d animation look", "yellow hoodie", "teal jacket", "portrait 9:16"):
+        for phrase in ("3d animated movie frame", "yellow hoodie", "teal jacket", "vertical 9:16"):
             assert phrase in prompt
 
 
