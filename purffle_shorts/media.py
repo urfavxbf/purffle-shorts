@@ -407,6 +407,11 @@ class Visuals:
                 if numbered:
                     log.info("Scene %d: numbered local %s", idx + 1, numbered.path)
                     return numbered
+                # Do not quietly fill a missing numbered scene with some other
+                # file chosen at random; strict channels must detect that hole.
+                if list(Path(self.s.media_dir).glob("scene_[0-9][0-9].*")):
+                    log.warning("Scene %d: no matching numbered art in %s", idx + 1, self.s.media_dir)
+                    continue
             if source in ("openai-images", "ai", "dalle", "gpt-image", "pollinations"):
                 item = self._ai(source, image_prompt or query, dest_dir, idx)
                 if item:
