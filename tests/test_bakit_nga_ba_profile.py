@@ -32,7 +32,7 @@ def test_3d_look_prompt_consistency():
     episode = Script.from_dict(json.loads(EPISODE.read_text(encoding="utf-8")))
     for scene in episode.scenes:
         prompt = scene.image_prompt.lower()
-        for phrase in ("3d animation look", "yellow hoodie", "teal jacket", "portrait 9:16"):
+        for phrase in ("3d animated movie frame", "yellow hoodie", "teal jacket", "vertical 9:16"):
             assert phrase in prompt
 
 
@@ -44,6 +44,9 @@ def test_profile_is_fil_and_export_only():
     assert env["UPLOAD"] == "false"
     assert env["KEEP_VIDEOS"] == "true"
     assert env["SCRIPT_REVIEW"] == "off"
+    assert env["MIN_VISUAL_COVERAGE"] == "1.0"
+    assert env["VISUAL_SOURCES"] == "local"
+    assert env["CTA_COLOR"] == "#1E2A78"
     assert all("KEY" not in key or not val for key, val in env.items() if key.endswith("_API_KEY"))
 
 
@@ -51,8 +54,12 @@ def test_workflow_requires_manual_action_and_enforces_no_upload():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "workflow_dispatch:" in text
     assert "schedule:" not in text
-    assert "pull_request:" not in text
+    assert "pull_request:" in text  # validates each change but never publishes
     assert "--no-upload" in text
     assert 'UPLOAD: "false"' in text
     assert "--script examples/bakit-nga-ba-cheaters.json" in text
     assert "upload-artifact@v4" in text
+    assert "visual_audit.json" in text
+    assert "if: failure()" in text
+    assert "scene_{number:02d}.jpg" in text
+    assert "bakit-nga-ba-art.wordplays-transcribe.workers.dev" in text

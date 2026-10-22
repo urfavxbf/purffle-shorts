@@ -40,6 +40,7 @@ from .script import (
 from .timing import SceneTiming, caption_chunks, scene_timeline, split_shots, srt, tokenize
 from .topics import Topic, pick_topic
 from .utils import Cancelled, check_cancel, redact, slugify, truncate_words
+from .visual_quality import audit_scene_visuals, require_visual_coverage
 
 log = logging.getLogger("purffle")
 
@@ -163,6 +164,19 @@ def _unique_folder(root: Path, name: str) -> Path:
         folder = root / f"{name}-{n}"
         n += 1
     return folder
+
+
+def shots_requiring_media(shots, s: Settings) -> tuple[list, bool]:
+    """A prepared numbered art folder is scene-indexed, never shot-indexed."""
+    numbered_local = (
+        bool(s.visual_sources)
+        and s.visual_sources[0] == "local"
+        and (Path(s.media_dir) / "scene_01.jpg").is_file()
+    )
+    one_per_scene = bool(s.visual_sources) and (
+        s.visual_sources[0] in AI_SOURCES or numbered_local
+    )
+    return [shot for shot in shots if shot.part == 0 or not one_per_scene], numbered_local
 
 
 def _media_for(shots, media_map: dict[tuple[int, int], MediaItem]) -> list[MediaItem]:
@@ -415,8 +429,11 @@ class Studio:
             else:
                 # AI images cost money or are rate-limited: the extra shots of a scene reuse its picture with a
                 # new camera move instead of asking for another one.
-                ai_first = bool(s.visual_sources) and s.visual_sources[0] in AI_SOURCES
-                wanted = [st for st in shots if st.part == 0 or not ai_first]
+                # A complete scene_01.jpg ... scene_NN.jpg folder must be treated
+                # as ONE image per storyboard scene, not one image per split shot.
+                # Without this, scene 7 might receive the scene 10 artwork while
+                # all files still pass a superficial "valid image" QA check.
+                wanted, numbered_local = shots_requiring_media(shots, s)
                 jobs = [(script.scenes[st.index].search_query, script.scenes[st.index].image_prompt,
                          st.duration + T) for st in wanted]
                 # split layout: the footage fills the top half, so search for the shape of that half
@@ -425,8 +442,29 @@ class Studio:
                 got = dict(zip(((st.index, st.part) for st in wanted),
                                visuals.for_scenes(jobs, script.topic, work / "media", progress=self._sub)))
                 media = [got.get((st.index, st.part)) or got[(st.index, 0)] for st in shots]
+                if numbered_local:
+                    for shot, item in zip(shots, media):
+                        expected = f"scene_{shot.index + 1:02d}"
+                        actual = Path(item.path).stem if item.path else ""
+                        if actual != expected:
+                            raise RuntimeError(
+                                f"Storyboarding mismatch at scene {shot.index + 1}: "
+                                f"expected {expected}, found {actual or item.source}"
+                            )
                 credits = visuals.credits
             by_scene = {(st.index, st.part): m for st, m in zip(shots, media)}
+            # In high-fidelity channel profiles, fail early rather than ship a nearly
+            # blank MP4 when image services run out of credits. Keep a per-scene report
+            # even on failure; CI always uploads it for diagnosis.
+            visual_audit = audit_scene_visuals(shots, media, len(script.scenes))
+            (folder / "visual_audit.json").write_text(
+                json.dumps(visual_audit, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            log.info(
+                "Visual coverage: %d/%d scenes (required %.0f%%)",
+                visual_audit["complete_scenes"], visual_audit["scene_count"], 100 * s.min_visual_coverage,
+            )
+            require_visual_coverage(visual_audit, s.min_visual_coverage)
 
             self._step("captions")
             chunks = caption_chunks(speech.words, s.caption_max_words, total=total)
@@ -491,7 +529,7 @@ class Studio:
                 "duration": round(info["duration"], 2), "resolution": f"{s.width}x{s.height}",
                 "llm": writer, "score": script.score, "rubric": script.rubric, "review": script.review,
                 "search_keywords": pick.keywords, "localizations": localizations, "cover_at": round(cover_at, 2),
-                "cast": script.cast,
+                "cast": script.cast, "visual_audit": visual_audit,
                 "voice": f"{speech.engine}:{speech.voice}", "timing": speech.timing,
                 "visuals": [{"source": m.source, "id": m.id, "kind": m.kind, "query": m.query}
                             for m in media + ([background] if split else [])],

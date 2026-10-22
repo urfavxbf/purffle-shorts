@@ -444,7 +444,7 @@ def hook_png(settings: Settings, font_path: Path | None, text: str, dest: Path,
 
 def cta_png(settings: Settings, font_path: Path | None, text: str, dest: Path,
             y_ratio: float = 0.30) -> tuple[Path, int]:
-    img = _text_box(settings, font_path, text, size_ratio=0.062, fill="#FFFFFF", box="#FF0033", box_alpha=235,
+    img = _text_box(settings, font_path, text, size_ratio=0.062, fill="#FFFFFF", box=settings.cta_color, box_alpha=235,
                     max_lines=2)
     img.save(dest)
     return dest, int(settings.height * y_ratio)
@@ -502,7 +502,7 @@ def write_ass(settings: Settings, style: CapStyle, family: str, chunks: list[Chu
         f"{2 if style.shadow else 0},5,40,40,0,1",
         f"Style: Hook,{family},{int(U * 0.07)},&H00FFFFFF,&H00FFFFFF,&H50000000,&H50000000,-1,0,0,0,100,100,0,0,3,"
         f"{int(U * 0.02)},0,8,60,60,{int(H * hook_y)},1",
-        f"Style: Cta,{family},{int(U * 0.058)},&H00FFFFFF,&H00FFFFFF,&H003300FF,&H003300FF,-1,0,0,0,100,100,0,0,3,"
+        f"Style: Cta,{family},{int(U * 0.058)},&H00FFFFFF,&H00FFFFFF,{_ass_color(settings.cta_color)},{_ass_color(settings.cta_color)},-1,0,0,0,100,100,0,0,3,"
         f"{int(U * 0.022)},0,8,60,60,{int(H * cta_y)},1",
         f"Style: Mark,{family},{int(U * 0.032)},&H66FFFFFF,&H66FFFFFF,&H90000000,&H00000000,-1,0,0,0,100,100,0,0,1,"
         f"2,0,8,20,20,{int(H * 0.045)},1",
