@@ -416,7 +416,16 @@ class Studio:
             else:
                 # AI images cost money or are rate-limited: the extra shots of a scene reuse its picture with a
                 # new camera move instead of asking for another one.
-                ai_first = bool(s.visual_sources) and s.visual_sources[0] in AI_SOURCES
+                # A complete scene_01.jpg ... scene_NN.jpg folder must be treated
+                # as ONE image per storyboard scene, not one image per split shot.
+                # Without this, scene 7 might receive the scene 10 artwork while
+                # all files still pass a superficial "valid image" QA check.
+                numbered_local = (
+                    bool(s.visual_sources)
+                    and s.visual_sources[0] == "local"
+                    and (Path(s.media_dir) / "scene_01.jpg").is_file()
+                )
+                ai_first = bool(s.visual_sources) and (s.visual_sources[0] in AI_SOURCES or numbered_local)
                 wanted = [st for st in shots if st.part == 0 or not ai_first]
                 jobs = [(script.scenes[st.index].search_query, script.scenes[st.index].image_prompt,
                          st.duration + T) for st in wanted]
@@ -426,6 +435,15 @@ class Studio:
                 got = dict(zip(((st.index, st.part) for st in wanted),
                                visuals.for_scenes(jobs, script.topic, work / "media", progress=self._sub)))
                 media = [got.get((st.index, st.part)) or got[(st.index, 0)] for st in shots]
+                if numbered_local:
+                    for shot, item in zip(shots, media):
+                        expected = f"scene_{shot.index + 1:02d}"
+                        actual = Path(item.path).stem if item.path else ""
+                        if actual != expected:
+                            raise RuntimeError(
+                                f"Storyboarding mismatch at scene {shot.index + 1}: "
+                                f"expected {expected}, found {actual or item.source}"
+                            )
                 credits = visuals.credits
             by_scene = {(st.index, st.part): m for st, m in zip(shots, media)}
             # In high-fidelity channel profiles, fail early rather than ship a nearly
