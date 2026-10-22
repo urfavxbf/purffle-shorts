@@ -139,6 +139,7 @@ class Settings:
     media_dir: str = "media"
     image_model: str = "gpt-image-1"
     visual_style: str = "cinematic, dramatic lighting, highly detailed, vertical composition"
+    min_visual_coverage: float = 0.0  # opt-in per-scene quality gate; 1.0 rejects every gradient fallback
     prefer_4k: bool = False
     background_video: str = ""        # a video file or folder (gameplay, satisfying clips) played under stories
     background_layout: str = "full"   # full = the background is the picture; split = footage on top, it below
@@ -313,6 +314,7 @@ class Settings:
             media_dir=_env("MEDIA_DIR", d.media_dir),
             image_model=_env("IMAGE_MODEL", d.image_model),
             visual_style=_env("VISUAL_STYLE", d.visual_style),
+            min_visual_coverage=_float("MIN_VISUAL_COVERAGE", d.min_visual_coverage),
             prefer_4k=_bool(_env("PREFER_4K", "false")),
             background_video=_env("BACKGROUND_VIDEO"),
             background_layout=_env("BACKGROUND_LAYOUT", d.background_layout).lower(),
@@ -383,6 +385,8 @@ class Settings:
             youtube_api_key=_env("YOUTUBE_API_KEY"),
             notify_webhook=_env("NOTIFY_WEBHOOK"),
         )
+        if not 0.0 <= s.min_visual_coverage <= 1.0:
+            raise ConfigError("MIN_VISUAL_COVERAGE must be between 0.0 and 1.0")
         from .crosspost import PLATFORMS, TIKTOK_PRIVACY
         bad = [p for p in s.publish_to if p not in PLATFORMS]
         if bad:
