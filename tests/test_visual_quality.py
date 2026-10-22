@@ -1,14 +1,15 @@
 """Regression tests for the all-gradient video defect reported in the first Short."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from PIL import Image
 
-from purffle_shorts.visual_quality import VisualQualityError, audit_scene_visuals, require_visual_coverage
-from purffle_shorts.pipeline import shots_requiring_media
-from purffle_shorts.media import Visuals
 from purffle_shorts.config import Settings
+from purffle_shorts.media import Visuals
+from purffle_shorts.pipeline import shots_requiring_media
+from purffle_shorts.visual_quality import VisualQualityError, audit_scene_visuals, require_visual_coverage
 
 
 def _shot(index):
