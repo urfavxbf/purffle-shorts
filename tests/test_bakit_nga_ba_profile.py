@@ -44,6 +44,7 @@ def test_profile_is_fil_and_export_only():
     assert env["UPLOAD"] == "false"
     assert env["KEEP_VIDEOS"] == "true"
     assert env["SCRIPT_REVIEW"] == "off"
+    assert env["MIN_VISUAL_COVERAGE"] == "1.0"
     assert all("KEY" not in key or not val for key, val in env.items() if key.endswith("_API_KEY"))
 
 
@@ -56,3 +57,5 @@ def test_workflow_requires_manual_action_and_enforces_no_upload():
     assert 'UPLOAD: "false"' in text
     assert "--script examples/bakit-nga-ba-cheaters.json" in text
     assert "upload-artifact@v4" in text
+    assert "visual_audit.json" in text
+    assert "if: failure()" in text
